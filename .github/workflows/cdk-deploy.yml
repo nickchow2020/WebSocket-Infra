@@ -1,0 +1,86 @@
+name: Deploy CDK Infrastructure
+
+on:
+  # Manual trigger only (for safety)
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+
+  # Optional: Auto-deploy on push to main (use with caution!)
+  # push:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - 'lib/**'
+  #     - 'bin/**'
+
+env:
+  AWS_REGION: us-east-1
+  NODE_VERSION: '20'
+
+jobs:
+  deploy:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write  # Required for OIDC
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Optional: Use OIDC instead of access keys (more secure)
+      # - name: Configure AWS credentials (OIDC)
+      #   uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     role-to-assume: arn:aws:iam::123456789012:role/GitHubActionsCDKRole
+      #     aws-region: ${{ env.AWS_REGION }}
+
+      - name: CDK Diff
+        run: |
+          npx cdk diff --context environment=${{ github.event.inputs.environment }}
+
+      - name: CDK Deploy
+        run: |
+          npx cdk deploy \
+            --context environment=${{ github.event.inputs.environment }} \
+            --require-approval never \
+            --verbose
+
+      - name: Deployment Summary
+        if: always()
+        run: |
+          echo "### Infrastructure Deployment Summary :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment:** ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Region:** ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Infrastructure deployment completed! :white_check_mark:" >> $GITHUB_STEP_SUMMARY
