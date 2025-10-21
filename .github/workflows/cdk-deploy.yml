@@ -17,8 +17,8 @@ on:
   #   branches:
   #     - main
   #   paths:
-  #     - 'lib/**'
-  #     - 'bin/**'
+  #     - 'cdk-template/lib/**'
+  #     - 'cdk-template/bin/**'
 
 env:
   AWS_REGION: us-east-1
@@ -42,11 +42,14 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
+          cache-dependency-path: 'cdk-template/package-lock.json'
 
       - name: Install dependencies
+        working-directory: ./cdk-template
         run: npm ci
 
       - name: Build TypeScript
+        working-directory: ./cdk-template
         run: npm run build
 
       - name: Configure AWS credentials
@@ -64,10 +67,12 @@ jobs:
       #     aws-region: ${{ env.AWS_REGION }}
 
       - name: CDK Diff
+        working-directory: ./cdk-template
         run: |
           npx cdk diff --context environment=${{ github.event.inputs.environment }}
 
       - name: CDK Deploy
+        working-directory: ./cdk-template
         run: |
           npx cdk deploy \
             --context environment=${{ github.event.inputs.environment }} \
